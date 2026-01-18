@@ -92,7 +92,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<ServiceOrder> getPendingOrders() {
         LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ServiceOrder::getStatus, "PENDING");
+        wrapper.in(ServiceOrder::getStatus, "PENDING", "APPROVED");
         wrapper.orderByAsc(ServiceOrder::getCreatedAt);
         return orderMapper.selectList(wrapper);
     }
@@ -112,8 +112,10 @@ public class OrderServiceImpl implements OrderService {
         if (!approved) {
             // 审核不通过，取消订单
             order.setStatus("CANCELLED");
+        } else {
+            // 审核通过，状态改为APPROVED，等待派单
+            order.setStatus("APPROVED");
         }
-        // 审核通过，状态保持PENDING，等待派单
         
         order.setUpdatedAt(LocalDateTime.now());
         return orderMapper.updateById(order) > 0;
@@ -127,7 +129,7 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(404, "订单不存在");
         }
         
-        if (!"PENDING".equals(order.getStatus())) {
+        if (!"APPROVED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus())) {
             throw new BusinessException(400, "订单状态不正确，无法派单");
         }
         

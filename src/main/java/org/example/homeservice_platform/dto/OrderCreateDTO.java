@@ -1,5 +1,6 @@
 package org.example.homeservice_platform.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,5 +22,6 @@ public class OrderCreateDTO {
     private String description;
     
     @NotNull(message = "服务时间不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime serviceTime;
 }
