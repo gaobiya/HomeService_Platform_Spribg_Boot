@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 订单控制器
@@ -86,6 +87,38 @@ public class OrderController {
     }
     
     /**
+     * 获取所有订单列表（按状态筛选）
+     */
+    @Operation(summary = "获取所有订单列表", description = "派单员查看所有订单，支持按状态筛选")
+    @GetMapping("/list/all")
+    public Result<List<ServiceOrder>> getAllOrders(@RequestParam(required = false) String status) {
+        List<ServiceOrder> orders;
+        if (status != null && !status.isEmpty()) {
+            // 按状态查询
+            if ("PENDING".equals(status) || "APPROVED".equals(status)) {
+                // 待审核和已审核待派单都从pending接口获取
+                orders = orderService.getPendingOrders();
+                if ("PENDING".equals(status)) {
+                    orders = orders.stream()
+                        .filter(order -> "PENDING".equals(order.getStatus()))
+                        .collect(java.util.stream.Collectors.toList());
+                } else if ("APPROVED".equals(status)) {
+                    orders = orders.stream()
+                        .filter(order -> "APPROVED".equals(order.getStatus()))
+                        .collect(java.util.stream.Collectors.toList());
+                }
+            } else {
+                // 其他状态需要从数据库查询
+                orders = orderService.getOrdersByStatus(status);
+            }
+        } else {
+            // 查询所有订单
+            orders = orderService.getAllOrders();
+        }
+        return Result.success(orders);
+    }
+    
+    /**
      * 审核订单
      */
     @Operation(summary = "审核订单", description = "派单员审核订单")
@@ -138,6 +171,20 @@ public class OrderController {
             return Result.success("订单已完成");
         }
         return Result.error("操作失败");
+    }
+    
+    /**
+     * 拒绝订单
+     */
+    @Operation(summary = "拒绝订单", description = "服务员拒绝派单员分配的订单")
+    @PutMapping("/reject")
+    public Result<?> rejectOrder(@RequestParam Long orderId,
+                                 @RequestParam Long workerId) {
+        boolean success = orderService.rejectOrder(orderId, workerId);
+        if (success) {
+            return Result.success("已拒绝订单，订单将重新进入派单池");
+        }
+        return Result.error("拒绝失败");
     }
     
     /**

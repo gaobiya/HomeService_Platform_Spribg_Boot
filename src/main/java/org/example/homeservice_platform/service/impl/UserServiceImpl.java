@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.homeservice_platform.common.BusinessException;
 import org.example.homeservice_platform.dto.UserLoginDTO;
+import org.example.homeservice_platform.mapper.ServiceOrderMapper;
 import org.example.homeservice_platform.mapper.UserInfoMapper;
+import org.example.homeservice_platform.model.ServiceOrder;
 import org.example.homeservice_platform.model.UserInfo;
 import org.example.homeservice_platform.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,46 +28,13 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private UserInfoMapper userInfoMapper;
     
+    @Autowired
+    private ServiceOrderMapper orderMapper;
+    
     @Override
     public Object login(UserLoginDTO loginDTO) {
-        // 微信小程序登录逻辑（简化版，实际应该调用微信API）
-        // 这里使用code模拟，实际项目中需要通过code获取openid
-        String code = loginDTO.getCode();
-        String role = loginDTO.getRole();
-        
-        if (code == null || code.isEmpty()) {
-            throw new BusinessException(400, "微信登录code不能为空");
-        }
-        
-        // 模拟通过code获取openid（实际应该调用微信API）
-        String openid = "wx_" + code.substring(0, Math.min(10, code.length()));
-        
-        // 查询用户是否存在
-        LambdaQueryWrapper<UserInfo> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserInfo::getPhone, openid); // 使用phone字段存储openid
-        UserInfo user = userInfoMapper.selectOne(wrapper);
-        
-        // 如果用户不存在，创建新用户
-        if (user == null) {
-            user = new UserInfo();
-            user.setUsername("用户" + System.currentTimeMillis());
-            user.setRole(role);
-            user.setPhone(openid);
-            user.setCreatedAt(LocalDateTime.now());
-            user.setUpdatedAt(LocalDateTime.now());
-            userInfoMapper.insert(user);
-        }
-        
-        // 生成token（简化版，实际应该使用JWT）
-        String token = UUID.randomUUID().toString().replace("-", "");
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("token", token);
-        result.put("userId", user.getId());
-        result.put("role", user.getRole());
-        result.put("username", user.getUsername());
-        
-        return result;
+        // 账号密码登录
+        return accountLogin(loginDTO.getUsername(), loginDTO.getPassword(), loginDTO.getRole());
     }
     
     @Override
@@ -115,5 +84,132 @@ public class UserServiceImpl implements UserService {
         userInfo.setUpdatedAt(LocalDateTime.now());
         userInfoMapper.insert(userInfo);
         return userInfo;
+    }
+    
+    @Override
+    public UserInfo register(String username, String password, String phone, String role) {
+        // 检查用户名是否已存在
+        LambdaQueryWrapper<UserInfo> usernameWrapper = new LambdaQueryWrapper<>();
+        usernameWrapper.eq(UserInfo::getUsername, username);
+        UserInfo existUser = userInfoMapper.selectOne(usernameWrapper);
+        if (existUser != null) {
+            throw new BusinessException(400, "用户名已存在");
+        }
+        
+        // 检查手机号是否已存在
+        LambdaQueryWrapper<UserInfo> phoneWrapper = new LambdaQueryWrapper<>();
+        phoneWrapper.eq(UserInfo::getPhone, phone);
+        existUser = userInfoMapper.selectOne(phoneWrapper);
+        if (existUser != null) {
+            throw new BusinessException(400, "手机号已被注册");
+        }
+        
+        // 创建新用户
+        UserInfo user = new UserInfo();
+        user.setUsername(username);
+        user.setPassword(password); // 明文存储（根据需求文档）
+        user.setPhone(phone);
+        user.setRole(role);
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        userInfoMapper.insert(user);
+        
+        return user;
+    }
+    
+    @Override
+    public Object accountLogin(String username, String password, String role) {
+        // 查询用户（支持用户名或手机号登录）
+        LambdaQueryWrapper<UserInfo> wrapper = new LambdaQueryWrapper<>();
+        wrapper.and(w -> w.eq(UserInfo::getUsername, username).or().eq(UserInfo::getPhone, username))
+               .eq(UserInfo::getRole, role);
+        UserInfo user = userInfoMapper.selectOne(wrapper);
+        
+        if (user == null) {
+            throw new BusinessException(401, "用户名或密码错误");
+        }
+        
+        // 验证密码（明文比较，根据需求文档）
+        if (user.getPassword() == null || user.getPassword().isEmpty()) {
+            throw new BusinessException(401, "用户名或密码错误");
+        }
+        if (!password.equals(user.getPassword())) {
+            throw new BusinessException(401, "用户名或密码错误");
+        }
+        
+        // 生成token
+        String token = UUID.randomUUID().toString().replace("-", "");
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("token", token);
+        result.put("userId", user.getId());
+        result.put("role", user.getRole());
+        result.put("username", user.getUsername());
+        
+        return result;
+    }
+    
+    @Override
+    public java.util.List<UserInfo> getUserList(String role, String keyword) {
+        LambdaQueryWrapper<UserInfo> wrapper = new LambdaQueryWrapper<>();
+        
+        // 角色筛选
+        if (role != null && !role.isEmpty()) {
+            wrapper.eq(UserInfo::getRole, role);
+        }
+        
+        // 关键词搜索（用户名或手机号）
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(UserInfo::getUsername, keyword)
+                            .or()
+                            .like(UserInfo::getPhone, keyword));
+        }
+        
+        wrapper.orderByDesc(UserInfo::getCreatedAt);
+        return userInfoMapper.selectList(wrapper);
+    }
+    
+    @Override
+    public boolean deleteUser(Long userId) {
+        // 检查用户是否存在
+        UserInfo user = userInfoMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        
+        // 检查是否有未完成的订单
+        LambdaQueryWrapper<ServiceOrder> orderWrapper = new LambdaQueryWrapper<>();
+        orderWrapper.and(w -> w.eq(ServiceOrder::getCustomerId, userId)
+                            .or()
+                            .eq(ServiceOrder::getWorkerId, userId))
+                   .in(ServiceOrder::getStatus, "PENDING", "APPROVED", "IN_PROGRESS");
+        long orderCount = orderMapper.selectCount(orderWrapper);
+        
+        if (orderCount > 0) {
+            throw new BusinessException(400, "该用户有未完成的订单，无法删除");
+        }
+        
+        return userInfoMapper.deleteById(userId) > 0;
+    }
+    
+    @Override
+    public boolean changePassword(Long userId, String oldPassword, String newPassword) {
+        UserInfo user = userInfoMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        
+        // 验证原密码
+        if (user.getPassword() == null || user.getPassword().isEmpty()) {
+            throw new BusinessException(400, "用户未设置密码");
+        }
+        if (!oldPassword.equals(user.getPassword())) {
+            throw new BusinessException(400, "原密码错误");
+        }
+        
+        // 更新密码
+        user.setPassword(newPassword);
+        user.setUpdatedAt(LocalDateTime.now());
+        return userInfoMapper.updateById(user) > 0;
     }
 }

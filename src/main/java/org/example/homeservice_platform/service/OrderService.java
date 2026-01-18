@@ -86,4 +86,25 @@ public interface OrderService {
      * @return 是否成功
      */
     boolean payOrder(Long orderId, java.math.BigDecimal amount);
+    
+    /**
+     * 获取所有订单
+     * @return 订单列表
+     */
+    List<ServiceOrder> getAllOrders();
+    
+    /**
+     * 按状态获取订单列表
+     * @param status 订单状态
+     * @return 订单列表
+     */
+    List<ServiceOrder> getOrdersByStatus(String status);
+    
+    /**
+     * 服务员拒绝订单
+     * @param orderId 订单ID
+     * @param workerId 服务员ID
+     * @return 是否成功
+     */
+    boolean rejectOrder(Long orderId, Long workerId);
 }

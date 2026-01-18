@@ -8,9 +8,11 @@ import org.example.homeservice_platform.dto.OrderCreateDTO;
 import org.example.homeservice_platform.mapper.ServiceOrderMapper;
 import org.example.homeservice_platform.mapper.UserInfoMapper;
 import org.example.homeservice_platform.mapper.WorkerScheduleMapper;
+import org.example.homeservice_platform.mapper.WorkerServiceTypeMapper;
 import org.example.homeservice_platform.model.ServiceOrder;
 import org.example.homeservice_platform.model.UserInfo;
 import org.example.homeservice_platform.model.WorkerSchedule;
+import org.example.homeservice_platform.model.WorkerServiceType;
 import org.example.homeservice_platform.service.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,9 @@ public class OrderServiceImpl implements OrderService {
     
     @Autowired
     private WorkerScheduleMapper scheduleMapper;
+    
+    @Autowired
+    private WorkerServiceTypeMapper workerServiceTypeMapper;
     
     @Override
     @Transactional
@@ -217,10 +222,32 @@ public class OrderServiceImpl implements OrderService {
     }
     
     /**
-     * 自动派单：选择空闲的服务员
+     * 自动派单：选择空闲的服务员（优先匹配服务类型）
      */
     private Long autoAssignWorker(ServiceOrder order) {
-        // 查询所有服务员
+        String serviceType = order.getServiceType();
+        
+        // 首先查询设置了该服务类型的服务员
+        LambdaQueryWrapper<WorkerServiceType> serviceTypeWrapper = new LambdaQueryWrapper<>();
+        serviceTypeWrapper.eq(WorkerServiceType::getServiceType, serviceType);
+        List<WorkerServiceType> workerServiceTypes = workerServiceTypeMapper.selectList(serviceTypeWrapper);
+        
+        // 如果找到了设置了该服务类型的服务员，优先从这些服务员中选择
+        if (workerServiceTypes != null && !workerServiceTypes.isEmpty()) {
+            for (WorkerServiceType wst : workerServiceTypes) {
+                Long workerId = wst.getWorkerId();
+                // 验证服务员是否存在
+                UserInfo worker = userInfoMapper.selectById(workerId);
+                if (worker != null && "worker".equals(worker.getRole())) {
+                    // 检查是否有空闲时间
+                    if (!hasTimeConflict(workerId, order.getServiceTime())) {
+                        return workerId;
+                    }
+                }
+            }
+        }
+        
+        // 如果没有找到匹配服务类型的服务员，或者都有时间冲突，则查询所有服务员
         LambdaQueryWrapper<UserInfo> userWrapper = new LambdaQueryWrapper<>();
         userWrapper.eq(UserInfo::getRole, "worker");
         List<UserInfo> workers = userInfoMapper.selectList(userWrapper);
@@ -247,5 +274,47 @@ public class OrderServiceImpl implements OrderService {
         long count = orderMapper.selectCount(orderWrapper);
         
         return count > 0;
+    }
+    
+    @Override
+    public List<ServiceOrder> getAllOrders() {
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        return orderMapper.selectList(wrapper);
+    }
+    
+    @Override
+    public List<ServiceOrder> getOrdersByStatus(String status) {
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ServiceOrder::getStatus, status);
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        return orderMapper.selectList(wrapper);
+    }
+    
+    @Override
+    @Transactional
+    public boolean rejectOrder(Long orderId, Long workerId) {
+        ServiceOrder order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(404, "订单不存在");
+        }
+        
+        // 验证订单是否属于该服务员
+        if (order.getWorkerId() == null || !order.getWorkerId().equals(workerId)) {
+            throw new BusinessException(400, "无权操作此订单");
+        }
+        
+        // 验证订单状态
+        if (!"IN_PROGRESS".equals(order.getStatus())) {
+            throw new BusinessException(400, "订单状态不正确，无法拒绝");
+        }
+        
+        // 拒绝后：将订单状态改为APPROVED，workerId设为null，等待重新派单
+        order.setStatus("APPROVED");
+        order.setWorkerId(null);
+        order.setAssignedTime(null);
+        order.setUpdatedAt(LocalDateTime.now());
+        
+        return orderMapper.updateById(order) > 0;
     }
 }

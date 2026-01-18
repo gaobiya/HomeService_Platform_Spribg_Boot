@@ -1,5 +1,6 @@
 package org.example.homeservice_platform.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
@@ -10,22 +11,20 @@ import lombok.Data;
 public class UserLoginDTO {
     
     /**
-     * 微信登录临时code（小程序使用）
-     */
-    private String code;
-    
-    /**
      * 用户角色：customer-客户, worker-服务员
      */
+    @NotBlank(message = "角色不能为空")
     private String role;
     
     /**
-     * 用户名（派单员登录使用）
+     * 用户名或手机号
      */
+    @NotBlank(message = "用户名或手机号不能为空")
     private String username;
     
     /**
-     * 密码（派单员登录使用）
+     * 密码
      */
+    @NotBlank(message = "密码不能为空")
     private String password;
 }

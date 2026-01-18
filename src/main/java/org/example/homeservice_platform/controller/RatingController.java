@@ -2,7 +2,9 @@ package org.example.homeservice_platform.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.example.homeservice_platform.common.Result;
+import org.example.homeservice_platform.dto.RatingCreateDTO;
 import org.example.homeservice_platform.model.OrderRating;
 import org.example.homeservice_platform.service.RatingService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,12 +29,14 @@ public class RatingController {
      */
     @Operation(summary = "创建评价", description = "对订单进行评价")
     @PostMapping
-    public Result<?> createRating(@RequestParam Long orderId,
-                                  @RequestParam Long raterId,
-                                  @RequestParam Long rateeId,
-                                  @RequestParam Integer rating,
-                                  @RequestParam(required = false) String comment) {
-        boolean success = ratingService.createRating(orderId, raterId, rateeId, rating, comment);
+    public Result<?> createRating(@Valid @RequestBody RatingCreateDTO ratingDTO) {
+        boolean success = ratingService.createRating(
+            ratingDTO.getOrderId(),
+            ratingDTO.getRaterId(),
+            ratingDTO.getRateeId(),
+            ratingDTO.getRating(),
+            ratingDTO.getComment()
+        );
         if (success) {
             return Result.success("评价成功");
         }
