@@ -1,0 +1,156 @@
+package org.example.homeservice_platform.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.example.homeservice_platform.common.Result;
+import org.example.homeservice_platform.dto.OrderCreateDTO;
+import org.example.homeservice_platform.model.ServiceOrder;
+import org.example.homeservice_platform.service.OrderService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 订单控制器
+ * @author system
+ */
+@Tag(name = "订单模块", description = "订单创建、查询、派单、支付等功能")
+@RestController
+@RequestMapping("/api/order")
+public class OrderController {
+    
+    @Autowired
+    private OrderService orderService;
+    
+    /**
+     * 创建订单
+     */
+    @Operation(summary = "创建订单", description = "客户发布服务需求")
+    @PostMapping("/create")
+    public Result<?> createOrder(@RequestParam Long customerId, 
+                                 @Valid @RequestBody OrderCreateDTO createDTO) {
+        Long orderId = orderService.createOrder(customerId, createDTO);
+        Map<String, Object> result = new HashMap<>();
+        result.put("orderId", orderId);
+        return Result.success("订单创建成功", result);
+    }
+    
+    /**
+     * 获取订单详情
+     */
+    @Operation(summary = "获取订单详情", description = "根据订单ID获取订单详细信息")
+    @GetMapping("/{orderId}")
+    public Result<ServiceOrder> getOrder(@PathVariable Long orderId) {
+        ServiceOrder order = orderService.getOrderById(orderId);
+        if (order == null) {
+            return Result.notFound("订单不存在");
+        }
+        return Result.success(order);
+    }
+    
+    /**
+     * 获取客户订单列表
+     */
+    @Operation(summary = "获取客户订单列表", description = "查询客户的订单列表")
+    @GetMapping("/list/customer")
+    public Result<List<ServiceOrder>> getCustomerOrders(@RequestParam Long customerId,
+                                                         @RequestParam(required = false) String status) {
+        List<ServiceOrder> orders = orderService.getCustomerOrders(customerId, status);
+        return Result.success(orders);
+    }
+    
+    /**
+     * 获取服务员订单列表
+     */
+    @Operation(summary = "获取服务员订单列表", description = "查询服务员的订单列表")
+    @GetMapping("/list/worker")
+    public Result<List<ServiceOrder>> getWorkerOrders(@RequestParam Long workerId,
+                                                      @RequestParam(required = false) String status) {
+        List<ServiceOrder> orders = orderService.getWorkerOrders(workerId, status);
+        return Result.success(orders);
+    }
+    
+    /**
+     * 获取待审核订单列表（派单员）
+     */
+    @Operation(summary = "获取待审核订单列表", description = "派单员查看待审核的订单")
+    @GetMapping("/list/pending")
+    public Result<List<ServiceOrder>> getPendingOrders() {
+        List<ServiceOrder> orders = orderService.getPendingOrders();
+        return Result.success(orders);
+    }
+    
+    /**
+     * 审核订单
+     */
+    @Operation(summary = "审核订单", description = "派单员审核订单")
+    @PutMapping("/review")
+    public Result<?> reviewOrder(@RequestParam Long orderId, 
+                                @RequestParam Boolean approved) {
+        boolean success = orderService.reviewOrder(orderId, approved);
+        if (success) {
+            return Result.success(approved ? "审核通过" : "审核驳回");
+        }
+        return Result.error("审核失败");
+    }
+    
+    /**
+     * 派单
+     */
+    @Operation(summary = "派单", description = "派单员派单给服务员（workerId为null时自动派单）")
+    @PutMapping("/assign")
+    public Result<?> assignOrder(@RequestParam Long orderId,
+                                @RequestParam(required = false) Long workerId) {
+        boolean success = orderService.assignOrder(orderId, workerId);
+        if (success) {
+            return Result.success("派单成功");
+        }
+        return Result.error("派单失败");
+    }
+    
+    /**
+     * 服务员接单
+     */
+    @Operation(summary = "接单", description = "服务员接受派单")
+    @PutMapping("/accept")
+    public Result<?> acceptOrder(@RequestParam Long orderId,
+                                @RequestParam Long workerId) {
+        boolean success = orderService.acceptOrder(orderId, workerId);
+        if (success) {
+            return Result.success("接单成功");
+        }
+        return Result.error("接单失败");
+    }
+    
+    /**
+     * 完成订单
+     */
+    @Operation(summary = "完成订单", description = "服务员完成服务")
+    @PutMapping("/complete")
+    public Result<?> completeOrder(@RequestParam Long orderId) {
+        boolean success = orderService.completeOrder(orderId);
+        if (success) {
+            return Result.success("订单已完成");
+        }
+        return Result.error("操作失败");
+    }
+    
+    /**
+     * 支付订单
+     */
+    @Operation(summary = "支付订单", description = "客户支付订单（模拟支付）")
+    @PostMapping("/pay")
+    public Result<?> payOrder(@RequestParam Long orderId,
+                             @RequestParam BigDecimal amount) {
+        boolean success = orderService.payOrder(orderId, amount);
+        if (success) {
+            return Result.success("支付成功");
+        }
+        return Result.error("支付失败");
+    }
+}
