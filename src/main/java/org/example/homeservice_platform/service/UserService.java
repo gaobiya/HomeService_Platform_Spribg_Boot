@@ -1,5 +1,6 @@
 package org.example.homeservice_platform.service;
 
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.dto.UserLoginDTO;
 import org.example.homeservice_platform.model.UserInfo;
 
@@ -71,6 +72,16 @@ public interface UserService {
      * @return 用户列表
      */
     java.util.List<UserInfo> getUserList(String role, String keyword);
+    
+    /**
+     * 获取用户列表（分页，支持角色筛选和搜索）
+     * @param role 角色筛选（可选）
+     * @param keyword 搜索关键词（用户名或手机号，可选）
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<UserInfo> getUserListPage(String role, String keyword, Long pageNum, Long pageSize);
     
     /**
      * 删除用户

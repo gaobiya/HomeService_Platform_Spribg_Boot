@@ -170,6 +170,28 @@ public class UserServiceImpl implements UserService {
     }
     
     @Override
+    public org.example.homeservice_platform.dto.PageResult<UserInfo> getUserListPage(String role, String keyword, Long pageNum, Long pageSize) {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<UserInfo> page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<UserInfo> wrapper = new LambdaQueryWrapper<>();
+        
+        // 角色筛选
+        if (role != null && !role.isEmpty()) {
+            wrapper.eq(UserInfo::getRole, role);
+        }
+        
+        // 关键词搜索（用户名或手机号）
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(UserInfo::getUsername, keyword)
+                            .or()
+                            .like(UserInfo::getPhone, keyword));
+        }
+        
+        wrapper.orderByDesc(UserInfo::getCreatedAt);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<UserInfo> result = userInfoMapper.selectPage(page, wrapper);
+        return new org.example.homeservice_platform.dto.PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
     public boolean deleteUser(Long userId) {
         // 检查用户是否存在
         UserInfo user = userInfoMapper.selectById(userId);

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.example.homeservice_platform.common.Result;
 import org.example.homeservice_platform.dto.OrderCreateDTO;
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.model.ServiceOrder;
 import org.example.homeservice_platform.service.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +67,19 @@ public class OrderController {
     }
     
     /**
+     * 获取客户订单列表（分页）
+     */
+    @Operation(summary = "获取客户订单列表（分页）", description = "查询客户的订单列表，支持分页")
+    @GetMapping("/list/customer/page")
+    public Result<PageResult<ServiceOrder>> getCustomerOrdersPage(@RequestParam Long customerId,
+                                                                  @RequestParam(required = false) String status,
+                                                                  @RequestParam(defaultValue = "1") Long pageNum,
+                                                                  @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<ServiceOrder> result = orderService.getCustomerOrdersPage(customerId, status, pageNum, pageSize);
+        return Result.success(result);
+    }
+    
+    /**
      * 获取服务员订单列表
      */
     @Operation(summary = "获取服务员订单列表", description = "查询服务员的订单列表")
@@ -77,6 +91,19 @@ public class OrderController {
     }
     
     /**
+     * 获取服务员订单列表（分页）
+     */
+    @Operation(summary = "获取服务员订单列表（分页）", description = "查询服务员的订单列表，支持分页")
+    @GetMapping("/list/worker/page")
+    public Result<PageResult<ServiceOrder>> getWorkerOrdersPage(@RequestParam Long workerId,
+                                                                 @RequestParam(required = false) String status,
+                                                                 @RequestParam(defaultValue = "1") Long pageNum,
+                                                                 @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<ServiceOrder> result = orderService.getWorkerOrdersPage(workerId, status, pageNum, pageSize);
+        return Result.success(result);
+    }
+    
+    /**
      * 获取待审核订单列表（派单员）
      */
     @Operation(summary = "获取待审核订单列表", description = "派单员查看待审核的订单")
@@ -84,6 +111,17 @@ public class OrderController {
     public Result<List<ServiceOrder>> getPendingOrders() {
         List<ServiceOrder> orders = orderService.getPendingOrders();
         return Result.success(orders);
+    }
+    
+    /**
+     * 获取待审核订单列表（分页）
+     */
+    @Operation(summary = "获取待审核订单列表（分页）", description = "派单员查看待审核的订单，支持分页")
+    @GetMapping("/list/pending/page")
+    public Result<PageResult<ServiceOrder>> getPendingOrdersPage(@RequestParam(defaultValue = "1") Long pageNum,
+                                                                 @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<ServiceOrder> result = orderService.getPendingOrdersPage(pageNum, pageSize);
+        return Result.success(result);
     }
     
     /**
@@ -116,6 +154,44 @@ public class OrderController {
             orders = orderService.getAllOrders();
         }
         return Result.success(orders);
+    }
+    
+    /**
+     * 获取所有订单列表（分页，按状态筛选）
+     */
+    @Operation(summary = "获取所有订单列表（分页）", description = "派单员查看所有订单，支持按状态筛选和分页")
+    @GetMapping("/list/all/page")
+    public Result<PageResult<ServiceOrder>> getAllOrdersPage(@RequestParam(required = false) String status,
+                                                              @RequestParam(defaultValue = "1") Long pageNum,
+                                                              @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<ServiceOrder> result;
+        if (status != null && !status.isEmpty()) {
+            // 按状态查询
+            if ("PENDING".equals(status) || "APPROVED".equals(status)) {
+                // 待审核和已审核待派单都从pending接口获取
+                PageResult<ServiceOrder> pendingResult = orderService.getPendingOrdersPage(pageNum, pageSize);
+                if ("PENDING".equals(status)) {
+                    List<ServiceOrder> filtered = pendingResult.getRecords().stream()
+                        .filter(order -> "PENDING".equals(order.getStatus()))
+                        .collect(java.util.stream.Collectors.toList());
+                    result = new PageResult<>(filtered, pendingResult.getTotal(), pendingResult.getCurrent(), pendingResult.getSize());
+                } else if ("APPROVED".equals(status)) {
+                    List<ServiceOrder> filtered = pendingResult.getRecords().stream()
+                        .filter(order -> "APPROVED".equals(order.getStatus()))
+                        .collect(java.util.stream.Collectors.toList());
+                    result = new PageResult<>(filtered, pendingResult.getTotal(), pendingResult.getCurrent(), pendingResult.getSize());
+                } else {
+                    result = pendingResult;
+                }
+            } else {
+                // 其他状态需要从数据库查询
+                result = orderService.getOrdersByStatusPage(status, pageNum, pageSize);
+            }
+        } else {
+            // 查询所有订单
+            result = orderService.getAllOrdersPage(pageNum, pageSize);
+        }
+        return Result.success(result);
     }
     
     /**

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.example.homeservice_platform.common.Result;
 import org.example.homeservice_platform.dto.ChangePasswordDTO;
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.dto.UserLoginDTO;
 import org.example.homeservice_platform.dto.UserRegisterDTO;
 import org.example.homeservice_platform.model.UserInfo;
@@ -109,6 +110,19 @@ public class UserController {
                                                @RequestParam(required = false) String keyword) {
         List<UserInfo> users = userService.getUserList(role, keyword);
         return Result.success(users);
+    }
+    
+    /**
+     * 获取用户列表（分页，支持角色筛选和搜索）
+     */
+    @Operation(summary = "获取用户列表（分页）", description = "获取用户列表，支持按角色筛选、搜索和分页")
+    @GetMapping("/list/page")
+    public Result<PageResult<UserInfo>> getUserListPage(@RequestParam(required = false) String role,
+                                                          @RequestParam(required = false) String keyword,
+                                                          @RequestParam(defaultValue = "1") Long pageNum,
+                                                          @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<UserInfo> result = userService.getUserListPage(role, keyword, pageNum, pageSize);
+        return Result.success(result);
     }
     
     /**

@@ -2,9 +2,11 @@ package org.example.homeservice_platform.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.homeservice_platform.common.BusinessException;
 import org.example.homeservice_platform.dto.OrderCreateDTO;
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.mapper.ServiceOrderMapper;
 import org.example.homeservice_platform.mapper.UserInfoMapper;
 import org.example.homeservice_platform.mapper.WorkerScheduleMapper;
@@ -84,6 +86,19 @@ public class OrderServiceImpl implements OrderService {
     }
     
     @Override
+    public PageResult<ServiceOrder> getCustomerOrdersPage(Long customerId, String status, Long pageNum, Long pageSize) {
+        Page<ServiceOrder> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ServiceOrder::getCustomerId, customerId);
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(ServiceOrder::getStatus, status);
+        }
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        Page<ServiceOrder> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
     public List<ServiceOrder> getWorkerOrders(Long workerId, String status) {
         LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ServiceOrder::getWorkerId, workerId);
@@ -95,11 +110,34 @@ public class OrderServiceImpl implements OrderService {
     }
     
     @Override
+    public PageResult<ServiceOrder> getWorkerOrdersPage(Long workerId, String status, Long pageNum, Long pageSize) {
+        Page<ServiceOrder> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ServiceOrder::getWorkerId, workerId);
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(ServiceOrder::getStatus, status);
+        }
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        Page<ServiceOrder> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
     public List<ServiceOrder> getPendingOrders() {
         LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(ServiceOrder::getStatus, "PENDING", "APPROVED");
         wrapper.orderByAsc(ServiceOrder::getCreatedAt);
         return orderMapper.selectList(wrapper);
+    }
+    
+    @Override
+    public PageResult<ServiceOrder> getPendingOrdersPage(Long pageNum, Long pageSize) {
+        Page<ServiceOrder> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(ServiceOrder::getStatus, "PENDING", "APPROVED");
+        wrapper.orderByAsc(ServiceOrder::getCreatedAt);
+        Page<ServiceOrder> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
     }
     
     @Override
@@ -284,11 +322,30 @@ public class OrderServiceImpl implements OrderService {
     }
     
     @Override
+    public PageResult<ServiceOrder> getAllOrdersPage(Long pageNum, Long pageSize) {
+        Page<ServiceOrder> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        Page<ServiceOrder> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
     public List<ServiceOrder> getOrdersByStatus(String status) {
         LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ServiceOrder::getStatus, status);
         wrapper.orderByDesc(ServiceOrder::getCreatedAt);
         return orderMapper.selectList(wrapper);
+    }
+    
+    @Override
+    public PageResult<ServiceOrder> getOrdersByStatusPage(String status, Long pageNum, Long pageSize) {
+        Page<ServiceOrder> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ServiceOrder::getStatus, status);
+        wrapper.orderByDesc(ServiceOrder::getCreatedAt);
+        Page<ServiceOrder> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
     }
     
     @Override

@@ -1,6 +1,7 @@
 package org.example.homeservice_platform.service;
 
 import org.example.homeservice_platform.dto.OrderCreateDTO;
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.model.ServiceOrder;
 
 import java.util.List;
@@ -35,6 +36,16 @@ public interface OrderService {
     List<ServiceOrder> getCustomerOrders(Long customerId, String status);
     
     /**
+     * 获取客户订单列表（分页）
+     * @param customerId 客户ID
+     * @param status 订单状态（可选）
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<ServiceOrder> getCustomerOrdersPage(Long customerId, String status, Long pageNum, Long pageSize);
+    
+    /**
      * 获取服务员订单列表
      * @param workerId 服务员ID
      * @param status 订单状态（可选）
@@ -43,10 +54,28 @@ public interface OrderService {
     List<ServiceOrder> getWorkerOrders(Long workerId, String status);
     
     /**
+     * 获取服务员订单列表（分页）
+     * @param workerId 服务员ID
+     * @param status 订单状态（可选）
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<ServiceOrder> getWorkerOrdersPage(Long workerId, String status, Long pageNum, Long pageSize);
+    
+    /**
      * 获取所有待审核订单
      * @return 订单列表
      */
     List<ServiceOrder> getPendingOrders();
+    
+    /**
+     * 获取所有待审核订单（分页）
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<ServiceOrder> getPendingOrdersPage(Long pageNum, Long pageSize);
     
     /**
      * 审核订单
@@ -94,11 +123,28 @@ public interface OrderService {
     List<ServiceOrder> getAllOrders();
     
     /**
+     * 获取所有订单（分页）
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<ServiceOrder> getAllOrdersPage(Long pageNum, Long pageSize);
+    
+    /**
      * 按状态获取订单列表
      * @param status 订单状态
      * @return 订单列表
      */
     List<ServiceOrder> getOrdersByStatus(String status);
+    
+    /**
+     * 按状态获取订单列表（分页）
+     * @param status 订单状态
+     * @param pageNum 页码
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    PageResult<ServiceOrder> getOrdersByStatusPage(String status, Long pageNum, Long pageSize);
     
     /**
      * 服务员拒绝订单
