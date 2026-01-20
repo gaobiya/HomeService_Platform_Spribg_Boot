@@ -42,6 +42,15 @@ public class RatingServiceImpl implements RatingService {
             throw new BusinessException(400, "订单未完成，无法评价");
         }
         
+        // 判断评价人是客户还是服务员
+        boolean isCustomerRating = raterId.equals(order.getCustomerId());
+        boolean isWorkerRating = order.getWorkerId() != null && raterId.equals(order.getWorkerId());
+        
+        // 如果是服务员评价客户，需要检查订单是否已支付
+        if (isWorkerRating && order.getPaid() == 0) {
+            throw new BusinessException(400, "订单未支付，无法评价");
+        }
+        
         // 检查是否已经评价过
         LambdaQueryWrapper<OrderRating> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OrderRating::getOrderId, orderId)

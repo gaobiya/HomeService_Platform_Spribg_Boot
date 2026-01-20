@@ -115,8 +115,8 @@ public class OrderServiceImpl implements OrderService {
         }
         
         if (!approved) {
-            // 审核不通过，取消订单
-            order.setStatus("CANCELLED");
+            // 审核不通过，驳回订单
+            order.setStatus("REJECTED");
         } else {
             // 审核通过，状态改为APPROVED，等待派单
             order.setStatus("APPROVED");
@@ -134,8 +134,8 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(404, "订单不存在");
         }
         
-        if (!"APPROVED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus())) {
-            throw new BusinessException(400, "订单状态不正确，无法派单");
+        if (!"APPROVED".equals(order.getStatus())) {
+            throw new BusinessException(400, "订单状态不正确，只有已审核通过的订单才能派单");
         }
         
         // 如果workerId为null，执行自动派单

@@ -1,0 +1,7 @@
+-- 添加 REJECTED（已驳回）状态到订单状态枚举
+-- 执行此脚本前请备份数据库
+
+ALTER TABLE `service_order` 
+MODIFY COLUMN `status` ENUM('PENDING', 'APPROVED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'REJECTED') 
+NOT NULL DEFAULT 'PENDING' 
+COMMENT '订单状态：PENDING-待审核, APPROVED-已审核待派单, IN_PROGRESS-进行中, COMPLETED-已完成, CANCELLED-已取消, REJECTED-已驳回';

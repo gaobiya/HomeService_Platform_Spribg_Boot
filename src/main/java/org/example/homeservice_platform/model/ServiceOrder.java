@@ -53,7 +53,7 @@ public class ServiceOrder {
     private LocalDateTime serviceTime;
     
     /**
-     * 订单状态：PENDING-待审核, APPROVED-已审核待派单, IN_PROGRESS-进行中, COMPLETED-已完成, CANCELLED-已取消
+     * 订单状态：PENDING-待审核, APPROVED-已审核待派单, IN_PROGRESS-进行中, COMPLETED-已完成, CANCELLED-已取消, REJECTED-已驳回
      */
     private String status;
     

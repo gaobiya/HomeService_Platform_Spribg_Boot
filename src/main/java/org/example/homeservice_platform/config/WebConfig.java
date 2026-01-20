@@ -6,6 +6,8 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.io.File;
+
 /**
  * Web配置类（跨域配置、静态资源）
  * @author system
@@ -28,8 +30,17 @@ public class WebConfig implements WebMvcConfigurer {
     
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // 将相对路径转换为绝对路径
+        File uploadDir = new File(uploadPath);
+        String absolutePath = uploadDir.getAbsolutePath();
+        
+        // 确保路径以分隔符结尾
+        if (!absolutePath.endsWith(File.separator)) {
+            absolutePath += File.separator;
+        }
+        
         // 配置静态资源访问路径，使上传的文件可以通过URL访问
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadPath + "/");
+                .addResourceLocations("file:" + absolutePath);
     }
 }
