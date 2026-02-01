@@ -216,4 +216,17 @@ public class UserController {
         }
         return Result.error("密码修改失败，原密码错误");
     }
+    
+    /**
+     * 服务员提现（扣减余额并记录，直接成功）
+     */
+    @Operation(summary = "服务员提现", description = "服务员提现，扣减余额并记录，直接成功")
+    @PostMapping("/withdraw")
+    public Result<?> withdraw(@RequestParam Long userId, @RequestParam java.math.BigDecimal amount) {
+        boolean success = userService.withdraw(userId, amount);
+        if (success) {
+            return Result.success("提现成功");
+        }
+        return Result.error("提现失败");
+    }
 }

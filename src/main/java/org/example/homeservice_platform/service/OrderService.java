@@ -153,4 +153,12 @@ public interface OrderService {
      * @return 是否成功
      */
     boolean rejectOrder(Long orderId, Long workerId);
+    
+    /**
+     * 获取可用于派单的服务员列表（包含评分，支持按评分排序）
+     * @param orderId 订单ID（用于检查时间冲突）
+     * @param sortByRating 是否按评分排序（true-从高到低，false-不排序）
+     * @return 服务员列表（包含评分）
+     */
+    java.util.List<org.example.homeservice_platform.dto.WorkerWithRatingDTO> getAvailableWorkersForAssign(Long orderId, boolean sortByRating);
 }

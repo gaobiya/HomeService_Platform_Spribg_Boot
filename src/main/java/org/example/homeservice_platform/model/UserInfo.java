@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -45,6 +46,11 @@ public class UserInfo {
      * 联系电话
      */
     private String phone;
+    
+    /**
+     * 服务员余额（仅服务员使用，客户支付成功后入账）
+     */
+    private BigDecimal balance;
     
     /**
      * 注册时间

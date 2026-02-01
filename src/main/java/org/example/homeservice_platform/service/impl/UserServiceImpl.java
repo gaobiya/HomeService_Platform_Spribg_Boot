@@ -6,12 +6,16 @@ import org.example.homeservice_platform.common.BusinessException;
 import org.example.homeservice_platform.dto.UserLoginDTO;
 import org.example.homeservice_platform.mapper.ServiceOrderMapper;
 import org.example.homeservice_platform.mapper.UserInfoMapper;
+import org.example.homeservice_platform.mapper.WithdrawMapper;
 import org.example.homeservice_platform.model.ServiceOrder;
 import org.example.homeservice_platform.model.UserInfo;
+import org.example.homeservice_platform.model.Withdraw;
 import org.example.homeservice_platform.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +34,9 @@ public class UserServiceImpl implements UserService {
     
     @Autowired
     private ServiceOrderMapper orderMapper;
+    
+    @Autowired
+    private WithdrawMapper withdrawMapper;
     
     @Override
     public Object login(UserLoginDTO loginDTO) {
@@ -110,6 +117,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(password); // 明文存储（根据需求文档）
         user.setPhone(phone);
         user.setRole(role);
+        user.setBalance(BigDecimal.ZERO); // 服务员余额初始为 0
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         userInfoMapper.insert(user);
@@ -204,7 +212,7 @@ public class UserServiceImpl implements UserService {
         orderWrapper.and(w -> w.eq(ServiceOrder::getCustomerId, userId)
                             .or()
                             .eq(ServiceOrder::getWorkerId, userId))
-                   .in(ServiceOrder::getStatus, "PENDING", "APPROVED", "IN_PROGRESS");
+                   .in(ServiceOrder::getStatus, "PENDING", "APPROVED", "ASSIGNED", "IN_PROGRESS");
         long orderCount = orderMapper.selectCount(orderWrapper);
         
         if (orderCount > 0) {
@@ -233,5 +241,34 @@ public class UserServiceImpl implements UserService {
         user.setPassword(newPassword);
         user.setUpdatedAt(LocalDateTime.now());
         return userInfoMapper.updateById(user) > 0;
+    }
+    
+    @Override
+    @Transactional
+    public boolean withdraw(Long workerId, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(400, "提现金额必须大于0");
+        }
+        UserInfo worker = userInfoMapper.selectById(workerId);
+        if (worker == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        if (!"worker".equals(worker.getRole())) {
+            throw new BusinessException(400, "仅服务员可提现");
+        }
+        BigDecimal balance = worker.getBalance() != null ? worker.getBalance() : BigDecimal.ZERO;
+        if (balance.compareTo(amount) < 0) {
+            throw new BusinessException(400, "余额不足");
+        }
+        worker.setBalance(balance.subtract(amount));
+        worker.setUpdatedAt(LocalDateTime.now());
+        userInfoMapper.updateById(worker);
+        Withdraw w = new Withdraw();
+        w.setWorkerId(workerId);
+        w.setAmount(amount);
+        w.setStatus("DONE"); // 直接成功，无需申请审核
+        w.setCreatedAt(LocalDateTime.now());
+        withdrawMapper.insert(w);
+        return true;
     }
 }

@@ -209,6 +209,18 @@ public class OrderController {
     }
     
     /**
+     * 获取可用于派单的服务员列表（包含评分）
+     */
+    @Operation(summary = "获取可用于派单的服务员列表", description = "获取可用于派单的服务员列表，包含评分，支持按评分排序")
+    @GetMapping("/assign/workers")
+    public Result<?> getAvailableWorkers(@RequestParam Long orderId,
+                                        @RequestParam(defaultValue = "false") Boolean sortByRating) {
+        java.util.List<org.example.homeservice_platform.dto.WorkerWithRatingDTO> workers = 
+            orderService.getAvailableWorkersForAssign(orderId, sortByRating);
+        return Result.success(workers);
+    }
+    
+    /**
      * 派单
      */
     @Operation(summary = "派单", description = "派单员派单给服务员（workerId为null时自动派单）")

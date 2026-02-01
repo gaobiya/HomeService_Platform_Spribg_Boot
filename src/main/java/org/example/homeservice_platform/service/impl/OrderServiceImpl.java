@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.homeservice_platform.common.BusinessException;
 import org.example.homeservice_platform.dto.OrderCreateDTO;
 import org.example.homeservice_platform.dto.PageResult;
+import org.example.homeservice_platform.dto.WorkerWithRatingDTO;
 import org.example.homeservice_platform.mapper.ServiceOrderMapper;
 import org.example.homeservice_platform.mapper.UserInfoMapper;
 import org.example.homeservice_platform.mapper.WorkerScheduleMapper;
@@ -44,6 +45,9 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private WorkerServiceTypeMapper workerServiceTypeMapper;
     
+    @Autowired
+    private org.example.homeservice_platform.service.RatingService ratingService;
+    
     @Override
     @Transactional
     public Long createOrder(Long customerId, OrderCreateDTO createDTO) {
@@ -60,7 +64,8 @@ public class OrderServiceImpl implements OrderService {
         order.setDescription(createDTO.getDescription());
         order.setServiceTime(createDTO.getServiceTime());
         order.setStatus("PENDING");
-        order.setAmount(BigDecimal.ZERO);
+        // 从DTO中获取订单金额
+        order.setAmount(createDTO.getAmount() != null ? createDTO.getAmount() : BigDecimal.ZERO);
         order.setPaid(0);
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
@@ -196,7 +201,8 @@ public class OrderServiceImpl implements OrderService {
         }
         
         order.setWorkerId(workerId);
-        order.setStatus("IN_PROGRESS");
+        // 派单后为「已派单待接单」，需服务员点击接受后才进入进行中
+        order.setStatus("ASSIGNED");
         order.setAssignedTime(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         
@@ -211,15 +217,16 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(404, "订单不存在");
         }
         
-        if (!order.getWorkerId().equals(workerId)) {
+        if (order.getWorkerId() == null || !order.getWorkerId().equals(workerId)) {
             throw new BusinessException(400, "无权操作此订单");
         }
         
-        if (!"IN_PROGRESS".equals(order.getStatus())) {
-            throw new BusinessException(400, "订单状态不正确");
+        // 仅当状态为「已派单待接单」时可接受，接受后进入进行中
+        if (!"ASSIGNED".equals(order.getStatus())) {
+            throw new BusinessException(400, "订单状态不正确，仅待接单订单可接受");
         }
         
-        // 接单后状态不变，仍为IN_PROGRESS
+        order.setStatus("IN_PROGRESS");
         order.setUpdatedAt(LocalDateTime.now());
         return orderMapper.updateById(order) > 0;
     }
@@ -256,14 +263,29 @@ public class OrderServiceImpl implements OrderService {
         order.setAmount(amount);
         order.setPaid(1);
         order.setUpdatedAt(LocalDateTime.now());
-        return orderMapper.updateById(order) > 0;
+        boolean updated = orderMapper.updateById(order) > 0;
+        if (updated && order.getWorkerId() != null) {
+            // 客户支付成功，服务员余额增加
+            UserInfo worker = userInfoMapper.selectById(order.getWorkerId());
+            if (worker != null) {
+                java.math.BigDecimal current = worker.getBalance() != null ? worker.getBalance() : java.math.BigDecimal.ZERO;
+                worker.setBalance(current.add(amount));
+                worker.setUpdatedAt(LocalDateTime.now());
+                userInfoMapper.updateById(worker);
+            }
+        }
+        return updated;
     }
     
     /**
-     * 自动派单：选择空闲的服务员（优先匹配服务类型）
+     * 自动派单：选择空闲的服务员（优先匹配服务类型，按评分从高到低排序）
      */
     private Long autoAssignWorker(ServiceOrder order) {
         String serviceType = order.getServiceType();
+        LocalDateTime serviceTime = order.getServiceTime();
+        
+        // 用于存储符合条件的服务员及其评分
+        java.util.List<java.util.Map<String, Object>> candidateWorkers = new java.util.ArrayList<>();
         
         // 首先查询设置了该服务类型的服务员
         LambdaQueryWrapper<WorkerServiceType> serviceTypeWrapper = new LambdaQueryWrapper<>();
@@ -277,41 +299,93 @@ public class OrderServiceImpl implements OrderService {
                 // 验证服务员是否存在
                 UserInfo worker = userInfoMapper.selectById(workerId);
                 if (worker != null && "worker".equals(worker.getRole())) {
-                    // 检查是否有空闲时间
-                    if (!hasTimeConflict(workerId, order.getServiceTime())) {
-                        return workerId;
+                    // 检查是否有空闲时间（包括可服务时间检查）
+                    if (!hasTimeConflict(workerId, serviceTime)) {
+                        // 获取平均评分
+                        Double avgRating = ratingService.getUserAverageRating(workerId);
+                        java.util.Map<String, Object> candidate = new java.util.HashMap<>();
+                        candidate.put("workerId", workerId);
+                        candidate.put("rating", avgRating);
+                        candidate.put("priority", 1); // 匹配服务类型，优先级1
+                        candidateWorkers.add(candidate);
                     }
                 }
             }
         }
         
         // 如果没有找到匹配服务类型的服务员，或者都有时间冲突，则查询所有服务员
-        LambdaQueryWrapper<UserInfo> userWrapper = new LambdaQueryWrapper<>();
-        userWrapper.eq(UserInfo::getRole, "worker");
-        List<UserInfo> workers = userInfoMapper.selectList(userWrapper);
-        
-        // 查找有空闲时间的服务员
-        for (UserInfo worker : workers) {
-            if (!hasTimeConflict(worker.getId(), order.getServiceTime())) {
-                return worker.getId();
+        if (candidateWorkers.isEmpty()) {
+            LambdaQueryWrapper<UserInfo> userWrapper = new LambdaQueryWrapper<>();
+            userWrapper.eq(UserInfo::getRole, "worker");
+            List<UserInfo> workers = userInfoMapper.selectList(userWrapper);
+            
+            // 查找有空闲时间的服务员
+            for (UserInfo worker : workers) {
+                if (!hasTimeConflict(worker.getId(), serviceTime)) {
+                    // 获取平均评分
+                    Double avgRating = ratingService.getUserAverageRating(worker.getId());
+                    java.util.Map<String, Object> candidate = new java.util.HashMap<>();
+                    candidate.put("workerId", worker.getId());
+                    candidate.put("rating", avgRating);
+                    candidate.put("priority", 2); // 不匹配服务类型，优先级2
+                    candidateWorkers.add(candidate);
+                }
             }
         }
         
-        return null;
+        // 如果没有符合条件的服务员，返回null
+        if (candidateWorkers.isEmpty()) {
+            return null;
+        }
+        
+        // 按优先级和评分排序：先按优先级（1优先于2），再按评分从高到低
+        candidateWorkers.sort((a, b) -> {
+            int priorityCompare = ((Integer) a.get("priority")).compareTo((Integer) b.get("priority"));
+            if (priorityCompare != 0) {
+                return priorityCompare;
+            }
+            // 优先级相同，按评分从高到低排序
+            return ((Double) b.get("rating")).compareTo((Double) a.get("rating"));
+        });
+        
+        // 返回评分最高的服务员ID
+        return (Long) candidateWorkers.get(0).get("workerId");
     }
     
     /**
-     * 检查时间冲突
+     * 检查时间冲突（包括订单冲突和可服务时间检查）
      */
     private boolean hasTimeConflict(Long workerId, LocalDateTime serviceTime) {
-        // 查询服务员在该时间段是否有其他订单
+        // 1. 检查是否有订单冲突（已派单待接单、进行中均视为占用该服务员该时段）
         LambdaQueryWrapper<ServiceOrder> orderWrapper = new LambdaQueryWrapper<>();
         orderWrapper.eq(ServiceOrder::getWorkerId, workerId)
-                   .in(ServiceOrder::getStatus, "PENDING", "IN_PROGRESS")
+                   .in(ServiceOrder::getStatus, "ASSIGNED", "IN_PROGRESS")
                    .eq(ServiceOrder::getServiceTime, serviceTime);
-        long count = orderMapper.selectCount(orderWrapper);
+        long orderCount = orderMapper.selectCount(orderWrapper);
+        if (orderCount > 0) {
+            return true; // 有订单冲突
+        }
         
-        return count > 0;
+        // 2. 检查是否在服务员的可服务时间内
+        // 先查询该服务员是否有设置可服务时间
+        LambdaQueryWrapper<WorkerSchedule> allScheduleWrapper = new LambdaQueryWrapper<>();
+        allScheduleWrapper.eq(WorkerSchedule::getWorkerId, workerId);
+        long totalScheduleCount = scheduleMapper.selectCount(allScheduleWrapper);
+        
+        // 如果服务员没有设置任何可服务时间，则允许派单（不检查可服务时间限制）
+        if (totalScheduleCount == 0) {
+            return false; // 没有设置可服务时间，允许派单，无冲突
+        }
+        
+        // 如果设置了可服务时间，则检查服务时间是否在可服务时间段内
+        LambdaQueryWrapper<WorkerSchedule> scheduleWrapper = new LambdaQueryWrapper<>();
+        scheduleWrapper.eq(WorkerSchedule::getWorkerId, workerId)
+                      .le(WorkerSchedule::getStartTime, serviceTime)
+                      .ge(WorkerSchedule::getEndTime, serviceTime);
+        long scheduleCount = scheduleMapper.selectCount(scheduleWrapper);
+        
+        // 如果服务时间不在任何可服务时间段内，则认为有冲突
+        return scheduleCount == 0; // 没有匹配的可服务时间记录，认为有冲突
     }
     
     @Override
@@ -361,9 +435,9 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(400, "无权操作此订单");
         }
         
-        // 验证订单状态
-        if (!"IN_PROGRESS".equals(order.getStatus())) {
-            throw new BusinessException(400, "订单状态不正确，无法拒绝");
+        // 仅「已派单待接单」时可拒绝；接单后只能完成，不能拒绝
+        if (!"ASSIGNED".equals(order.getStatus())) {
+            throw new BusinessException(400, "订单状态不正确，仅待接单时可拒绝");
         }
         
         // 拒绝后：将订单状态改为APPROVED，workerId设为null，等待重新派单
@@ -373,5 +447,63 @@ public class OrderServiceImpl implements OrderService {
         order.setUpdatedAt(LocalDateTime.now());
         
         return orderMapper.updateById(order) > 0;
+    }
+    
+    @Override
+    public java.util.List<WorkerWithRatingDTO> getAvailableWorkersForAssign(Long orderId, boolean sortByRating) {
+        // 获取订单信息
+        ServiceOrder order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(404, "订单不存在");
+        }
+        
+        LocalDateTime serviceTime = order.getServiceTime();
+        
+        // 查询所有服务员
+        LambdaQueryWrapper<UserInfo> userWrapper = new LambdaQueryWrapper<>();
+        userWrapper.eq(UserInfo::getRole, "worker");
+        List<UserInfo> workers = userInfoMapper.selectList(userWrapper);
+        
+        // 转换为DTO并过滤符合条件的服务员
+        java.util.List<WorkerWithRatingDTO> availableWorkers = new java.util.ArrayList<>();
+        for (UserInfo worker : workers) {
+            // 检查是否有时间冲突（包括可服务时间检查）
+            if (!hasTimeConflict(worker.getId(), serviceTime)) {
+                WorkerWithRatingDTO dto = new WorkerWithRatingDTO();
+                dto.setId(worker.getId());
+                dto.setUsername(worker.getUsername());
+                dto.setRole(worker.getRole());
+                dto.setPhone(worker.getPhone());
+                dto.setAvatarUrl(worker.getAvatarUrl());
+                
+                // 获取平均评分和评价数量
+                List<org.example.homeservice_platform.model.OrderRating> ratings = ratingService.getUserRatings(worker.getId());
+                if (ratings != null && !ratings.isEmpty()) {
+                    double sum = ratings.stream().mapToInt(org.example.homeservice_platform.model.OrderRating::getRating).sum();
+                    dto.setAverageRating(sum / ratings.size());
+                    dto.setRatingCount(ratings.size());
+                } else {
+                    dto.setAverageRating(0.0);
+                    dto.setRatingCount(0);
+                }
+                
+                availableWorkers.add(dto);
+            }
+        }
+        
+        // 如果要求按评分排序，则从高到低排序
+        if (sortByRating) {
+            availableWorkers.sort((a, b) -> {
+                // 先按评分从高到低排序
+                int ratingCompare = b.getAverageRating().compareTo(a.getAverageRating());
+                if (ratingCompare != 0) {
+                    return ratingCompare;
+                }
+                // 评分相同，按评价数量从多到少排序
+                return b.getRatingCount().compareTo(a.getRatingCount());
+            });
+        }
+        
+        return availableWorkers;
     }
 }

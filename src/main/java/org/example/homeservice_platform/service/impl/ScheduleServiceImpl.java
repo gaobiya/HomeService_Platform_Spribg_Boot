@@ -92,7 +92,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     public List<ServiceOrder> getWorkerScheduledOrders(Long workerId) {
         LambdaQueryWrapper<ServiceOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ServiceOrder::getWorkerId, workerId)
-               .in(ServiceOrder::getStatus, "IN_PROGRESS", "APPROVED")
+               .in(ServiceOrder::getStatus, "ASSIGNED", "IN_PROGRESS")
                .orderByAsc(ServiceOrder::getServiceTime);
         return orderMapper.selectList(wrapper);
     }
@@ -113,7 +113,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 检查与已有订单的冲突
         LambdaQueryWrapper<ServiceOrder> orderWrapper = new LambdaQueryWrapper<>();
         orderWrapper.eq(ServiceOrder::getWorkerId, workerId)
-                   .in(ServiceOrder::getStatus, "IN_PROGRESS", "APPROVED")
+                   .in(ServiceOrder::getStatus, "ASSIGNED", "IN_PROGRESS")
                    .and(w -> w.and(w1 -> w1.le(ServiceOrder::getServiceTime, startTime)
                                           .ge(ServiceOrder::getServiceTime, startTime))
                              .or(w2 -> w2.le(ServiceOrder::getServiceTime, endTime)

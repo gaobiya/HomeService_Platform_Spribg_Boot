@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.example.homeservice_platform.common.Result;
+import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.dto.RatingCreateDTO;
+import org.example.homeservice_platform.dto.RatingDTO;
 import org.example.homeservice_platform.model.OrderRating;
 import org.example.homeservice_platform.service.RatingService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,5 +63,17 @@ public class RatingController {
     public Result<List<OrderRating>> getUserRatings(@PathVariable Long userId) {
         List<OrderRating> ratings = ratingService.getUserRatings(userId);
         return Result.success(ratings);
+    }
+    
+    /**
+     * 获取所有评价列表（分页，包含用户名）- 后台管理使用
+     */
+    @Operation(summary = "获取所有评价列表", description = "后台管理查看所有评价，支持分页，包含用户名")
+    @GetMapping("/list/all/page")
+    public Result<PageResult<RatingDTO>> getAllRatingsPage(
+            @RequestParam(defaultValue = "1") Long pageNum,
+            @RequestParam(defaultValue = "10") Long pageSize) {
+        PageResult<RatingDTO> result = ratingService.getAllRatingsWithUsernamePage(pageNum, pageSize);
+        return Result.success(result);
     }
 }

@@ -1,12 +1,17 @@
 package org.example.homeservice_platform.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.homeservice_platform.common.BusinessException;
+import org.example.homeservice_platform.dto.PageResult;
+import org.example.homeservice_platform.dto.RatingDTO;
 import org.example.homeservice_platform.mapper.OrderRatingMapper;
 import org.example.homeservice_platform.mapper.ServiceOrderMapper;
+import org.example.homeservice_platform.mapper.UserInfoMapper;
 import org.example.homeservice_platform.model.OrderRating;
 import org.example.homeservice_platform.model.ServiceOrder;
+import org.example.homeservice_platform.model.UserInfo;
 import org.example.homeservice_platform.service.RatingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 评价服务实现类
@@ -28,6 +34,9 @@ public class RatingServiceImpl implements RatingService {
     
     @Autowired
     private ServiceOrderMapper orderMapper;
+    
+    @Autowired
+    private UserInfoMapper userInfoMapper;
     
     @Override
     @Transactional
@@ -91,5 +100,61 @@ public class RatingServiceImpl implements RatingService {
         wrapper.eq(OrderRating::getRateeId, userId)
                .orderByDesc(OrderRating::getCreatedAt);
         return ratingMapper.selectList(wrapper);
+    }
+    
+    @Override
+    public PageResult<OrderRating> getAllRatingsPage(Long pageNum, Long pageSize) {
+        Page<OrderRating> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<OrderRating> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(OrderRating::getCreatedAt);
+        Page<OrderRating> result = ratingMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
+    public PageResult<RatingDTO> getAllRatingsWithUsernamePage(Long pageNum, Long pageSize) {
+        // 先查询评价列表
+        Page<OrderRating> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<OrderRating> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(OrderRating::getCreatedAt);
+        Page<OrderRating> result = ratingMapper.selectPage(page, wrapper);
+        
+        // 转换为DTO并填充用户名
+        List<RatingDTO> ratingDTOList = result.getRecords().stream().map(rating -> {
+            RatingDTO dto = new RatingDTO();
+            dto.setId(rating.getId());
+            dto.setOrderId(rating.getOrderId());
+            dto.setRaterId(rating.getRaterId());
+            dto.setRateeId(rating.getRateeId());
+            dto.setRating(rating.getRating());
+            dto.setComment(rating.getComment());
+            dto.setCreatedAt(rating.getCreatedAt());
+            
+            // 查询评价人用户名
+            UserInfo rater = userInfoMapper.selectById(rating.getRaterId());
+            if (rater != null) {
+                dto.setRaterUsername(rater.getUsername());
+            }
+            
+            // 查询被评价人用户名
+            UserInfo ratee = userInfoMapper.selectById(rating.getRateeId());
+            if (ratee != null) {
+                dto.setRateeUsername(ratee.getUsername());
+            }
+            
+            return dto;
+        }).collect(Collectors.toList());
+        
+        return new PageResult<>(ratingDTOList, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+    
+    @Override
+    public Double getUserAverageRating(Long userId) {
+        List<OrderRating> ratings = getUserRatings(userId);
+        if (ratings == null || ratings.isEmpty()) {
+            return 0.0;
+        }
+        double sum = ratings.stream().mapToInt(OrderRating::getRating).sum();
+        return sum / ratings.size();
     }
 }

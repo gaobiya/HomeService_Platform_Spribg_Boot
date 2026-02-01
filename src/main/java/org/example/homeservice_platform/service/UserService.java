@@ -4,6 +4,8 @@ import org.example.homeservice_platform.dto.PageResult;
 import org.example.homeservice_platform.dto.UserLoginDTO;
 import org.example.homeservice_platform.model.UserInfo;
 
+import java.math.BigDecimal;
+
 /**
  * 用户服务接口
  * @author system
@@ -98,4 +100,12 @@ public interface UserService {
      * @return 是否成功
      */
     boolean changePassword(Long userId, String oldPassword, String newPassword);
+    
+    /**
+     * 服务员提现（扣减余额并记录提现申请，简单版不做真实打款）
+     * @param workerId 服务员ID
+     * @param amount 提现金额
+     * @return 是否成功
+     */
+    boolean withdraw(Long workerId, BigDecimal amount);
 }

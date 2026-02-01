@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -24,4 +26,11 @@ public class OrderCreateDTO {
     @NotNull(message = "服务时间不能为空")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime serviceTime;
+    
+    /**
+     * 订单金额
+     */
+    @NotNull(message = "订单金额不能为空")
+    @DecimalMin(value = "0.01", message = "订单金额必须大于0")
+    private BigDecimal amount;
 }
